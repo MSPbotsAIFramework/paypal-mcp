@@ -40,3 +40,26 @@ Independently re-run (not just trusted from the self-test section):
 ### Not re-litigated (tech-design latitude, not a review concern)
 
 The "Changes from the technical design during implementation" section documents several additions not named in the original file list (`app/serialize.py`, `app/tool_support.py`, `app/logging_utils.py`, the `http_app(stateless_http=True)` placement, `/health` via `@mcp.custom_route`). These are internal reuse/extraction that do not change any tool's name, parameters, or externally observable behavior, which `legs/dev.md` S4 and this ticket's own tech design explicitly leave to dev's discretion. No finding raised against them.
+
+## Round 2 · 2026-11-04 · reviewed 9061db6 (base cf7b17e)
+
+Verdict: approved
+
+Status: frozen @ 9061db6
+
+### Scope
+
+Rework delta only, per process: `git diff b890d23...9061db6` (the round-1 fix). Two files changed, both docs: `docs/tickets/PRD-21314.md` (+23/-3) and this review record (dev-appended "Fixes (round 1)" section, +42). No code, test, dependency, or README file touched; `main` is still at `cf7b17e` (unchanged since round 1), so the baseline did not move either.
+
+### Round-1 must-fix verification
+
+1. **Fixed.** `docs/tickets/PRD-21314.md:643`'s Chinese sentence is rewritten in English (commit `649bb30`, carried into the re-freeze at `9061db6`). Independently re-run on `9061db6`: `grep -rnP '[\x{4e00}-\x{9fff}]' --exclude-dir=.git --exclude-dir=.venv app tests docs/tickets/PRD-21314.md docs/tickets/PRD-21314.ac.json README.md` -> no output (clean), matching the updated self-test table. The lone whole-repo hit left by the same scan without the path filter (`docs/tickets/PRD-21314-review.md:20`) is this review record's own round-1 finding text, quoting the original violation verbatim for the audit trail — it predates this round, is not dev-owned, and is not a fresh instance of the SOP violation (SOP intent is user/vendor-facing content, not a review record's documentary quote of a defect it is tracking). Not re-litigated as a must-fix.
+2. `uv run pytest -v` independently re-run on `9061db6` -> 17/17 passed (0.69s), matching the self-test table and unchanged from round 1 (doc-only fix, no code touched).
+
+### Findings
+
+None. The round-2 diff is doc-only and limited to the must-fix fix itself; no new issue found.
+
+### Suggestions
+
+Carried over from round 1, still open and non-blocking (not touched this round): `app/settings.py:24-25` — `paypal_sandbox_base_url` / `paypal_live_base_url` are declared but never read; `app/paypal_client.py:22-23` hardcodes its own `_SANDBOX_HOST` / `_LIVE_HOST` constants instead. Wire up or remove the next time this file is touched.
