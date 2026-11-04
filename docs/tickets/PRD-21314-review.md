@@ -1,0 +1,28 @@
+# PRD-21314 · Code review
+
+## Round 1 · 2026-11-04 · reviewed b890d23 (base cf7b17e)
+
+Verdict: changes requested
+
+### Scope
+
+`git diff cf7b17e...b890d23` on `MSPbotsAIFramework/paypal-mcp` (the only repo on this ticket, `Track: vendor-mcp`, `Release order: any`). 28 files changed, all new except `README.md`. Read: `docs/tickets/PRD-21314.md` (product design, tech design, self-test, handoff), `docs/tickets/PRD-21314.ac.json` (17 test cases), all of `app/`, `tests/`, `Dockerfile`, `pyproject.toml`, `README.md`.
+
+Independently re-run (not just trusted from the self-test section):
+- `uv run pytest -v` on `b890d23` → 17/17 passed, matching the self-test table.
+- `grep -rnP '[\x{4e00}-\x{9fff}]' --exclude-dir=.git --exclude-dir=.venv .` on `b890d23` → **one hit**, contradicting the self-test table's "No output (clean)" (see Finding 1).
+- README's "MSPbots Connector" section vs. `vendor-mcp-development/reference/readme-connector-section.md` → byte-identical (71/71 lines), positioned correctly.
+- Tool catalog via `fastmcp.Client(build_mcp()).list_tools()` → exactly 10 tools; all descriptions ≤ 500 chars (max 452) and first lines ≤ 100 chars (max 89), matching the self-test table.
+- `.ac.json`: 17/17 entries present, 13 `pass` with a test reference, 4 `untested` with a real-PayPal-account reason recorded — no case marked `pass` without evidence, none silently green.
+
+### Findings
+
+1. **[must-fix]** `docs/tickets/PRD-21314.md:643` — the repo contains Chinese text, which the vendor-mcp-development SOP (S0.4) and this track's review checklist (`references/mcp-track.md` §4.3: "README 的 Connector 段落...; 仓库里没有中文") both require to be absent, no exception carved out for doc-only occurrences. The line is a literal Chinese quote of this pipeline's own `legs/dev.md` S4 rule ("dev 可自行改[技术设计]，只要不动用户可见行为"), embedded in the "Changes from the technical design during implementation" section. The Self-test section's own claim two sections earlier — "No-Chinese scan ... No output (clean)" — is stale: it was true when that scan was run, but the doc was edited afterward (this sentence was added later in the same file) and the scan was not re-run before the doc was frozen at `Status: frozen @ 5600026`. Confirmed independently on `b890d23`: `grep -rnP '[\x{4e00}-\x{9fff}]' --exclude-dir=.git --exclude-dir=.venv .` reports exactly this one line and nothing else. Fix: rewrite the sentence in English (e.g. "the technical design's own latitude (`legs/dev.md` S4: dev may freely change the technical design as long as it does not change user-visible behavior)"), re-run the no-Chinese scan, confirm clean, and re-freeze the doc.
+
+### Suggestions
+
+1. **[suggestion]** `app/settings.py:24-25` — `paypal_sandbox_base_url` / `paypal_live_base_url` are declared on `Settings` but never read anywhere; `app/paypal_client.py:22-23` hardcodes its own `_SANDBOX_HOST` / `_LIVE_HOST` module constants instead. Not a must-fix (dead config surface, not a behavior bug — `X-Paypal-Environment` still correctly selects sandbox vs. live via the hardcoded constants), but the two unused settings fields should either be wired up or removed the next time this file is touched, so there is only one place that names the PayPal hosts.
+
+### Not re-litigated (tech-design latitude, not a review concern)
+
+The "Changes from the technical design during implementation" section documents several additions not named in the original file list (`app/serialize.py`, `app/tool_support.py`, `app/logging_utils.py`, the `http_app(stateless_http=True)` placement, `/health` via `@mcp.custom_route`). These are internal reuse/extraction that do not change any tool's name, parameters, or externally observable behavior, which `legs/dev.md` S4 and this ticket's own tech design explicitly leave to dev's discretion. No finding raised against them.
