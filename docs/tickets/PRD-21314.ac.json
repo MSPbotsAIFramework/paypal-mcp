@@ -1,0 +1,174 @@
+[
+  {
+    "id": "TC-PP-001",
+    "ac": "AC1",
+    "text": "Given valid PayPal credential headers and a minimal {currency, amount} order payload, When paypal_create_order is called, Then it returns the order's id and a status in {CREATED, PAYER_ACTION_REQUIRED}, and the response JSON contains no client secret.",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_create_order_returns_id_and_status", "tests/test_tools.py::test_create_order_response_never_echoes_secret"],
+    "result": "pass",
+    "evidence": "uv run pytest tests/test_tools.py::test_create_order_returns_id_and_status tests/test_tools.py::test_create_order_response_never_echoes_secret -v @ 433e6cb -> both PASSED"
+  },
+  {
+    "id": "TC-PP-002",
+    "ac": "AC1",
+    "text": "Given a real PayPal sandbox app, When paypal_create_order is called end to end, Then a real order appears in the PayPal sandbox dashboard with matching id and amount.",
+    "type": "manual",
+    "steps": [
+      "Obtain a PayPal sandbox app Client ID/Secret (needs a real vendor account)",
+      "Call paypal_create_order with X-Paypal-Environment: sandbox and a {currency: USD, amount: 25.00} payload",
+      "Open the PayPal sandbox business dashboard and search for the returned order id"
+    ],
+    "expect": "The order exists in the sandbox dashboard with the same id, currency and amount returned by the tool",
+    "result": "untested",
+    "notes": "Blocked on a real PayPal sandbox account; does not block development or INT publish per the vendor-mcp-development SOP's \"no test account still publishes to INT\" rule. The mocked half of AC1 (TC-PP-001) and the live deployment smoke test (self-test \"Live container smoke test\") cover the request/response contract; only PayPal actually persisting the order is unverified."
+  },
+  {
+    "id": "TC-PP-003",
+    "ac": "AC2",
+    "text": "Given an order id that exists, When paypal_get_order is called, Then it returns that order's current status and amount breakdown unchanged from the mocked upstream response.",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_get_order_returns_status_and_amount"],
+    "result": "pass",
+    "evidence": "uv run pytest tests/test_tools.py::test_get_order_returns_status_and_amount -v @ 433e6cb -> PASSED"
+  },
+  {
+    "id": "TC-PP-004",
+    "ac": "AC3",
+    "text": "Given an order mocked as APPROVED, When paypal_capture_order is called, Then it returns a capture id, status, and a captured amount equal to the order's amount.",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_capture_order_returns_capture_matching_order_amount"],
+    "result": "pass",
+    "evidence": "uv run pytest tests/test_tools.py::test_capture_order_returns_capture_matching_order_amount -v @ 433e6cb -> PASSED"
+  },
+  {
+    "id": "TC-PP-005",
+    "ac": "AC3",
+    "text": "Given a real sandbox order moved through buyer approval, When paypal_capture_order is called, Then the sandbox dashboard shows a completed capture for that order.",
+    "type": "manual",
+    "steps": [
+      "Create a sandbox order and approve it as a sandbox buyer (PayPal sandbox buyer account)",
+      "Call paypal_capture_order with the approved order's id",
+      "Check the PayPal sandbox dashboard for the capture"
+    ],
+    "expect": "Capture appears as COMPLETED in the sandbox dashboard for the correct amount",
+    "result": "untested",
+    "notes": "Needs a real PayPal sandbox account; not a blocker (see TC-PP-002)."
+  },
+  {
+    "id": "TC-PP-006",
+    "ac": "AC4",
+    "text": "Given a capture mocked as COMPLETED and a refund amount less than or equal to the captured amount, When paypal_refund_capture is called, Then it returns a refund id and status.",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_refund_capture_returns_refund_id_and_status"],
+    "result": "pass",
+    "evidence": "uv run pytest tests/test_tools.py::test_refund_capture_returns_refund_id_and_status -v @ 433e6cb -> PASSED"
+  },
+  {
+    "id": "TC-PP-007",
+    "ac": "AC4",
+    "text": "Given a real captured sandbox payment, When paypal_refund_capture is called, Then the sandbox dashboard shows the refund applied.",
+    "type": "manual",
+    "steps": [
+      "Use the capture id produced by TC-PP-005",
+      "Call paypal_refund_capture with a partial amount",
+      "Check the PayPal sandbox dashboard for the refund"
+    ],
+    "expect": "Refund appears in the sandbox dashboard for the correct amount, capture balance reduced accordingly",
+    "result": "untested",
+    "notes": "Needs a real PayPal sandbox account; not a blocker (see TC-PP-002)."
+  },
+  {
+    "id": "TC-PP-008",
+    "ac": "AC5",
+    "text": "Given a capture id PayPal responds to with 404, When paypal_get_capture is called, Then it returns {error: {code: not_found}}, not a raw PayPal error body and not an unhandled 500.",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_get_capture_not_found_maps_to_structured_error"],
+    "result": "pass",
+    "evidence": "uv run pytest tests/test_tools.py::test_get_capture_not_found_maps_to_structured_error -v @ 433e6cb -> PASSED"
+  },
+  {
+    "id": "TC-PP-009",
+    "ac": "AC6",
+    "text": "Given a request missing the X-Paypal-Client-Secret header, When any paypal_* tool is called, Then the service responds 401 listing exactly the missing header(s), and no call to PayPal is attempted.",
+    "type": "auto",
+    "tests": ["tests/test_middleware.py::test_missing_credential_header_returns_401_before_any_upstream_call"],
+    "result": "pass",
+    "evidence": "uv run pytest tests/test_middleware.py::test_missing_credential_header_returns_401_before_any_upstream_call -v @ 433e6cb -> PASSED (asserts 401, missing_headers == [X-Paypal-Client-Secret], and the respx token route recorded 0 calls); also reproduced live against the built container: `curl -X POST :18099/mcp` with no credential headers -> HTTP 401 {\"error\":\"missing_credentials\",\"missing_headers\":[\"X-Paypal-Client-Id\",\"X-Paypal-Client-Secret\",\"X-Paypal-Environment\"]}"
+  },
+  {
+    "id": "TC-PP-010",
+    "ac": "AC7",
+    "text": "Given PayPal rejects the token mint with 401 (bad Client ID/Secret), When any paypal_* tool is called, Then it returns {error: {code: unauthorized}} and the submitted secret appears in neither the response nor any captured log line.",
+    "type": "auto",
+    "tests": ["tests/test_middleware.py::test_bad_credentials_return_unauthorized_without_leaking_secret"],
+    "result": "pass",
+    "evidence": "uv run pytest tests/test_middleware.py::test_bad_credentials_return_unauthorized_without_leaking_secret -v @ 433e6cb -> PASSED (asserts the unauthorized envelope and that the submitted secret string is absent from both the HTTP response body and every caplog record)"
+  },
+  {
+    "id": "TC-PP-011",
+    "ac": "AC8",
+    "text": "Given a draft invoice payload with a recipient email and at least one item, When paypal_create_invoice is called, Then it returns the new invoice's id with status DRAFT.",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_create_invoice_returns_draft_id"],
+    "result": "pass",
+    "evidence": "uv run pytest tests/test_tools.py::test_create_invoice_returns_draft_id -v @ 433e6cb -> PASSED"
+  },
+  {
+    "id": "TC-PP-012",
+    "ac": "AC9",
+    "text": "Given a draft invoice id, When paypal_send_invoice is called, Then it returns the invoice's updated status (SENT or PayPal's scheduled-send equivalent).",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_send_invoice_returns_sent_status"],
+    "result": "pass",
+    "evidence": "uv run pytest tests/test_tools.py::test_send_invoice_returns_sent_status -v @ 433e6cb -> PASSED"
+  },
+  {
+    "id": "TC-PP-013",
+    "ac": "AC10",
+    "text": "Given more invoices exist on the mocked account than the default limit, When paypal_list_invoices is called with no limit argument, Then it returns exactly the default limit (20) items and has_more: true.",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_list_invoices_default_limit_sets_has_more"],
+    "result": "pass",
+    "evidence": "uv run pytest tests/test_tools.py::test_list_invoices_default_limit_sets_has_more -v @ 433e6cb -> PASSED"
+  },
+  {
+    "id": "TC-PP-014",
+    "ac": "AC11",
+    "text": "Given two concurrent tool calls carry two different sets of PayPal credential headers, When both run concurrently against the same running service, Then each call only ever observes its own credentials and data, in neither the response nor any log line.",
+    "type": "auto",
+    "tests": ["tests/test_middleware.py::test_concurrent_requests_do_not_cross_contaminate_context"],
+    "result": "pass",
+    "evidence": "uv run pytest tests/test_middleware.py::test_concurrent_requests_do_not_cross_contaminate_context -v @ 433e6cb -> PASSED (two asyncio.gather'd requests with different credentials against the real ASGI app + CredentialMiddleware route to two different mocked PayPal accounts via distinct minted tokens; each response contains only its own account's currency/amount and neither contains the other call's credential string)"
+  },
+  {
+    "id": "TC-PP-015",
+    "ac": "AC12",
+    "text": "Given PayPal responds 429 with Retry-After on every attempt, When a tool issues the upstream call, Then the service retries with backoff honoring Retry-After up to the configured budget and then returns {error: {code: rate_limited}} without crashing or exceeding the overall time budget.",
+    "type": "auto",
+    "tests": ["tests/test_middleware.py::test_persistent_429_exhausts_retry_budget_and_returns_rate_limited"],
+    "result": "pass",
+    "evidence": "uv run pytest tests/test_middleware.py::test_persistent_429_exhausts_retry_budget_and_returns_rate_limited -v @ 433e6cb -> PASSED (respx route recorded exactly 4 calls = 1 initial + settings.max_retries(3); final result is the rate_limited envelope, retryable: true)"
+  },
+  {
+    "id": "TC-PP-016",
+    "ac": "AC13",
+    "text": "Given paypal_create_order is called with request_id=\"x\", When the outbound call to PayPal is made, Then it carries PayPal-Request-Id: x.",
+    "type": "auto",
+    "tests": ["tests/test_tools.py::test_create_order_forwards_request_id_as_paypal_request_id_header"],
+    "result": "pass",
+    "evidence": "uv run pytest tests/test_tools.py::test_create_order_forwards_request_id_as_paypal_request_id_header -v @ 433e6cb -> PASSED (asserts the respx-captured request carried header PayPal-Request-Id: x)"
+  },
+  {
+    "id": "TC-PP-017",
+    "ac": "AC13",
+    "text": "Given two live calls to paypal_create_order with the same caller-supplied request_id, When both reach PayPal, Then PayPal returns the same order id both times.",
+    "type": "manual",
+    "steps": [
+      "Call paypal_create_order twice with identical payload and request_id against a real sandbox app",
+      "Compare the two returned order ids"
+    ],
+    "expect": "Both calls return the same order id (PayPal's own idempotency guarantee, not something this service can fake)",
+    "result": "untested",
+    "notes": "Needs a real PayPal sandbox account; not a blocker (see TC-PP-002). The header-forwarding half (TC-PP-016) is verified -- the service correctly sends PayPal-Request-Id; whether PayPal itself honors it can only be proven against a live account."
+  }
+]
