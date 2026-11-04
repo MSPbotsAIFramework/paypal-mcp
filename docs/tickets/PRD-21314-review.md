@@ -23,6 +23,20 @@ Independently re-run (not just trusted from the self-test section):
 
 1. **[suggestion]** `app/settings.py:24-25` — `paypal_sandbox_base_url` / `paypal_live_base_url` are declared on `Settings` but never read anywhere; `app/paypal_client.py:22-23` hardcodes its own `_SANDBOX_HOST` / `_LIVE_HOST` module constants instead. Not a must-fix (dead config surface, not a behavior bug — `X-Paypal-Environment` still correctly selects sandbox vs. live via the hardcoded constants), but the two unused settings fields should either be wired up or removed the next time this file is touched, so there is only one place that names the PayPal hosts.
 
+### Fixes (round 1)
+
+1. **Must-fix 1** (`docs/tickets/PRD-21314.md:643`, Chinese text / stale no-Chinese scan claim) —
+   rewrote the sentence in English, matching the wording the review suggested. Added a "Review round 1
+   fix" note under Self-test documenting the re-run. Commit: `649bb30` (`fix(docs): translate stray
+   Chinese text in PRD-21314.md, update stale no-Chinese scan claim (PRD-21314)`). Doc re-frozen at
+   `Status: frozen @ 649bb30`.
+   Re-run results: `uv run pytest -v` 17/17 passed (unchanged, doc-only fix); no-Chinese scan on all
+   dev-owned paths (`app/`, `tests/`, `docs/tickets/PRD-21314.md`, `docs/tickets/PRD-21314.ac.json`,
+   `README.md`) is clean. The whole-repo scan still reports one hit at `docs/tickets/PRD-21314-review.md:20`
+   (this file, this finding, quoting the original text verbatim) — that is this review record itself,
+   frozen before this round and owned by the review leg, not dev; it is not re-litigated as a new
+   must-fix.
+
 ### Not re-litigated (tech-design latitude, not a review concern)
 
 The "Changes from the technical design during implementation" section documents several additions not named in the original file list (`app/serialize.py`, `app/tool_support.py`, `app/logging_utils.py`, the `http_app(stateless_http=True)` placement, `/health` via `@mcp.custom_route`). These are internal reuse/extraction that do not change any tool's name, parameters, or externally observable behavior, which `legs/dev.md` S4 and this ticket's own tech design explicitly leave to dev's discretion. No finding raised against them.
